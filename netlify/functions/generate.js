@@ -45,13 +45,23 @@ Each item: {
     })
 
     const data = await res.json()
-    const text = data.content?.[0]?.text?.replace(/```json|```/g, '').trim() || '[]'
+
+    // Surface Claude API errors (auth, model, quota, etc.)
+    if (data.type === 'error' || !res.ok) {
+      const errMsg = data.error?.message || data.message || JSON.stringify(data)
+      return { statusCode: 502, body: JSON.stringify({ error: `Claude API: ${errMsg}` }) }
+    }
+
+    const text = data.content?.[0]?.text?.replace(/```json|```/g, '').trim()
+    if (!text) {
+      return { statusCode: 502, body: JSON.stringify({ error: 'Empty response from Claude API' }) }
+    }
 
     let cards
     try {
       cards = JSON.parse(text)
     } catch {
-      return { statusCode: 500, body: JSON.stringify({ error: 'Failed to parse AI response' }) }
+      return { statusCode: 500, body: JSON.stringify({ error: 'Failed to parse AI response', raw: text.slice(0, 200) }) }
     }
 
     return { statusCode: 200, body: JSON.stringify({ cards }) }
