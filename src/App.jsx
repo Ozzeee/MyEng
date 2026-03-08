@@ -645,12 +645,23 @@ export default function App() {
 
   const loadCards = async () => {
     setLoading(true)
-    const { cards: fetched, error } = await apiNotion('list')
+    try {
+      const data = await apiNotion('list')
+      if (data.error) {
+        console.error('Notion API error:', data.error)
+        showToast('Ошибка загрузки из Notion', 'err')
+        setLoading(false)
+        return
+      }
+      const fetched = data.cards || []
+      setCards(fetched)
+      const allTags = Array.from(new Set(fetched.flatMap(c => c.tags || [])))
+      setTags(allTags)
+    } catch (err) {
+      console.error('Network error:', err)
+      showToast('Не удалось подключиться к серверу', 'err')
+    }
     setLoading(false)
-    if (error) { showToast('Ошибка загрузки из Notion', 'err'); return }
-    setCards(fetched || [])
-    const allTags = Array.from(new Set((fetched || []).flatMap(c => c.tags || [])))
-    setTags(allTags)
   }
 
   const showToast = useCallback((msg, type = 'ok') => {
@@ -707,17 +718,18 @@ export default function App() {
     const card = cards.find(c => c.id === cardId)
     if (!card || card.tags?.includes(tag)) return
     const newTags = [...(card.tags || []), tag]
-    // Update in Notion (we use the create approach — update properties)
-    await fetch(`/api/notion?action=mastered`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: cardId, mastered: card.mastered }),
-    })
     // Optimistic update
     const updated = cards.map(c => c.id === cardId ? { ...c, tags: newTags } : c)
     setCards(updated)
     const allTags = Array.from(new Set(updated.flatMap(c => c.tags || [])))
     setTags(allTags)
     if (viewCard?.id === cardId) setViewCard({ ...viewCard, tags: newTags })
+    // Save tags to Notion
+    const { error } = await apiNotion('update-tags', { id: cardId, tags: newTags })
+    if (error) {
+      showToast('Не удалось сохранить тег', 'err')
+      return
+    }
     showToast(`Тег "${tag}" добавлен`)
   }
 

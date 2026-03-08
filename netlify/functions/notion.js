@@ -3,7 +3,7 @@
 
 const NOTION_API = 'https://api.notion.com/v1'
 const NOTION_VERSION = '2022-06-28'
-const DATABASE_ID = '31d70567-e99a-8064-98b3-000b67bbc2e6'
+const DATABASE_ID = '31d70567-e99a-802a-9d20-ea007e44b2c5'
 
 export const handler = async (event) => {
   const token = process.env.NOTION_TOKEN
@@ -82,13 +82,36 @@ export const handler = async (event) => {
     // UPDATE mastered status
     if (action === 'mastered') {
       const { id, mastered } = body
-      await fetch(`${NOTION_API}/pages/${id}`, {
+      const res = await fetch(`${NOTION_API}/pages/${id}`, {
         method: 'PATCH',
         headers,
         body: JSON.stringify({
           properties: { Mastered: { checkbox: mastered } },
         }),
       })
+      const data = await res.json()
+      if (data.object === 'error') {
+        return { statusCode: 400, body: JSON.stringify({ error: data.message }) }
+      }
+      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
+    }
+
+    // UPDATE tags
+    if (action === 'update-tags') {
+      const { id, tags } = body
+      const res = await fetch(`${NOTION_API}/pages/${id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          properties: {
+            Tags: { multi_select: (tags || []).map(t => ({ name: t })) },
+          },
+        }),
+      })
+      const data = await res.json()
+      if (data.object === 'error') {
+        return { statusCode: 400, body: JSON.stringify({ error: data.message }) }
+      }
       return { statusCode: 200, body: JSON.stringify({ ok: true }) }
     }
 
